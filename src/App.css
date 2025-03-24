@@ -2,27 +2,73 @@
   box-sizing: border-box;
 }
 
-.card-images {
+body {
   display: flex;
-  max-width: 45rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  padding: 1rem;
+  max-width: 40rem;
   margin: 0 auto;
+}
+
+input {
+  border: solid gray 1px;
+  border-radius: 0;
+  font-size: 1rem;
+  width: 100%;
+}
+
+.search-results {
+  border: solid gray 1px;
+  border-radius: 0;
+  display: flex;
+  overflow: scroll;
+  margin-top: 1rem;
+  width: 100%;
+  padding: 10px;
+}
+
+.search-result {
+  display: flex;
+  flex-direction: column;
+  width: 33.33%;
+}
+
+.search-result-controls {
+  display: flex;
+
+  button {
+    font-size: 1rem;
+    flex-grow: 1;
+  }
+}
+
+.trade-proposals {
+  border: solid gray 1px;
+  border-top: none;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 1;
+  overflow-y: scroll;
+  padding: 10px;
+  padding-top: 0;
+  width: 100%;
+}
+
+h3 {
+  margin: 10px 0;
+}
+
+.proposed-cards {
+  display: flex;
 
   img {
-    border: solid transparent 3px;
-    cursor: pointer;
-    width: min(33%, 15rem);
+    width: 33.33%;
+  }
+}
 
-    &:not(.wishlisted) {
-      opacity: 0.3;
-    }
-
-    &:hover:not(.wishlisted) {
-      opacity: 0.5;
-    }
-
-    .wishlisted {
-      opacity: 1;
-    }
+.potential-trade-info {
+  width: 33.33%;
+  img {
+    width: 100%;
   }
 }

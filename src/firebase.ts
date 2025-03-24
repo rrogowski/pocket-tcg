@@ -5,9 +5,9 @@ import {
   signInWithPopup,
   User,
 } from "firebase/auth";
-import { getDatabase, onValue, ref, set } from "firebase/database";
+import { getDatabase, onValue, push, ref, set } from "firebase/database";
 import { useCallback, useEffect, useState } from "react";
-import { Card } from "./cards";
+import { Card, findCard } from "./cards";
 
 const app = initializeApp({
   apiKey: "AIzaSyAXAGWEO2PO_VqQVi-iXAd_wTQOkWn7JU4",
@@ -66,51 +66,91 @@ export const useAllUsers = () => {
   return users;
 };
 
-export const useWishlist = (
-  user: Partial<User> | null
-): [Partial<Card>[], (card: Card) => void, (card: Card) => void] => {
-  const [wishlist, setWishlist] = useState<Partial<Card>[]>([]);
+export type TradeProposals = {
+  [userId: string]: {
+    [key: string]: {
+      id: string;
+      set: string;
+      type: TradeProposalType;
+    };
+  };
+};
+
+export interface FlattenedTradeProposal {
+  key: string;
+  id: string;
+  set: string;
+  type: TradeProposalType;
+}
+
+export type TradeProposalType = "offer" | "request";
+
+export const useTradeProposals = () => {
+  const [tradeProposals, setTradeProposals] = useState<TradeProposals | null>(
+    null
+  );
 
   useEffect(() => {
-    if (!user) {
-      return;
-    }
     const unsubscribe = onValue(
-      ref(database, `/wishlists/${user.uid}`),
+      ref(database, `/trade-proposals`),
       (snapshot) => {
-        setWishlist(snapshot.val() ?? []);
+        setTradeProposals(snapshot.val());
       }
     );
-    return unsubscribe;
-  }, [user]);
+    return () => unsubscribe();
+  }, []);
 
-  const addToWishlist = useCallback(
-    (card: Card) => {
-      if (!user) {
-        return;
-      }
-      set(
-        ref(database, `/wishlists/${user.uid}`),
-        wishlist.concat({ set: card.set, number: card.number })
-      );
-    },
-    [wishlist]
-  );
+  const acceptTradeProposal = (
+    myOffer: FlattenedTradeProposal,
+    myRequest: FlattenedTradeProposal,
+    myUserId: string,
+    theirOffer: FlattenedTradeProposal,
+    theirRequest: FlattenedTradeProposal,
+    theirUserId: string,
+    theirName: string
+  ) => {
+    const myCard = findCard(myOffer)!;
+    const theirCard = findCard(theirOffer)!;
+    if (
+      !window.confirm(
+        `Trade your ${myCard.name} for ${theirName}'s ${theirCard.name}?`
+      )
+    ) {
+      return;
+    }
 
-  const removeFromWishlist = useCallback(
-    (card: Card) => {
-      if (!user) {
-        return;
-      }
-      set(
-        ref(database, `/wishlists/${user.uid}`),
-        wishlist.filter(
-          (w) => !(w.set === card.set && w.number === card.number)
-        )
-      );
-    },
-    [wishlist]
-  );
+    set(ref(database, `/trade-proposals/${myUserId}/${myOffer.key}`), null);
+    set(ref(database, `/trade-proposals/${myUserId}/${myRequest.key}`), null);
+    set(
+      ref(database, `/trade-proposals/${theirUserId}/${theirOffer.key}`),
+      null
+    );
+    set(
+      ref(database, `/trade-proposals/${theirUserId}/${theirRequest.key}`),
+      null
+    );
+  };
 
-  return [wishlist, addToWishlist, removeFromWishlist];
+  const createTradeProposal = (
+    card: Card,
+    type: TradeProposalType,
+    userId: string
+  ) => {
+    set(push(ref(database, `/trade-proposals/${userId}`)), {
+      id: card.id,
+      set: card.set,
+      type,
+    });
+  };
+
+  const deleteTradeProposal = (userId: string, key: string) => {
+    set(ref(database, `/trade-proposals/${userId}/${key}`), null);
+  };
+
+  return {
+    tradeProposals: tradeProposals ?? {},
+    acceptTradeProposal,
+    createTradeProposal,
+    deleteTradeProposal,
+  };
 };

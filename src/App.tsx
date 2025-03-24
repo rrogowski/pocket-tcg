@@ -1,81 +1,92 @@
-import { User } from "firebase/auth";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
-import { CardImage } from "./card-image";
-import { CARDS } from "./cards";
-import { useAllUsers, useAuth, useWishlist } from "./firebase";
-
-enum View {
-  ALL_CARDS,
-  MY_WISHLIST,
-  MY_FRIENDS,
-  FRIEND_WISHLIST,
-}
+import { CARDS, doRaritiesMatch, getCardImageUrl } from "./cards";
+import {
+  FlattenedTradeProposal,
+  useAllUsers,
+  useAuth,
+  useTradeProposals,
+} from "./firebase";
 
 interface Filters {
   set?: string;
-  rarity?: string;
-  type?: string;
 }
-
-const PAGE_SIZE = 9;
 
 function App() {
   const { currentUser, isAuthLoading, performGoogleSignIn } = useAuth();
   const allUsers = useAllUsers();
-  const [view, setView] = useState(View.ALL_CARDS);
   const [filters, setFilters] = useState<Filters>({});
-  const [page, setPage] = useState(1);
-  const [friend, setFriend] = useState<Partial<User> | null>(null);
 
-  const [myWishlist, addToMyWishlist, removeFromMyWishlist] =
-    useWishlist(currentUser);
-  const [friendWishlist] = useWishlist(friend);
+  const [maxSearchResults, setMaxSearchResults] = useState(9);
 
   const onSetSelected = (set: string) => {
     setFilters((f) => ({ ...f, set }));
-    setPage(1);
   };
 
-  const onRaritySelected = (rarity: string) => {
-    setFilters((f) => ({ ...f, rarity }));
-    setPage(1);
-  };
+  const loadMoreRef = useRef(null);
 
-  const onTypeSelected = (type: string) => {
-    setFilters((f) => ({ ...f, type }));
-    setPage(1);
-  };
+  useEffect(() => {
+    const loadMoreImages = (entries: IntersectionObserverEntry[]) => {
+      if (entries[0].isIntersecting) {
+        setMaxSearchResults((n) => n + 9);
+      }
+    };
 
-  const onFriendSelected = (friend: Partial<User>) => {
-    setFriend(friend);
-    setView(View.FRIEND_WISHLIST);
-  };
+    const observer = new IntersectionObserver(loadMoreImages, {
+      rootMargin: "100px",
+    });
 
-  const selectedCards =
-    view === View.FRIEND_WISHLIST
-      ? CARDS.filter((c) =>
-          friendWishlist.some((w) => w.set === c.set && w.number === c.number)
-        )
-      : view === View.MY_WISHLIST
-      ? CARDS.filter((c) =>
-          myWishlist.some((w) => w.set === c.set && w.number === c.number)
-        )
-      : CARDS;
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
 
-  const filteredCards = selectedCards
-    .filter((c) => (filters.set ? c.set === filters.set : true))
-    .filter((c) => (filters.rarity ? c.rarity === filters.rarity : true))
-    .filter((c) => (filters.type ? c.type.startsWith(filters.type) : true));
+    return () => {
+      observer.disconnect();
+    };
+  }, [loadMoreRef.current]);
 
-  const resultMin = (page - 1) * PAGE_SIZE;
-  const resultMax = Math.min(page * PAGE_SIZE, filteredCards.length);
-  const numberOfPages = Math.ceil(filteredCards.length / PAGE_SIZE);
+  const filteredCards = CARDS.filter((c) =>
+    filters.set ? c.set === filters.set : true
+  );
 
-  const hasPrevPage = resultMin > 0;
-  const hasNextPage = resultMax < filteredCards.length;
+  const [searchText, setSearchText] = useState("");
 
-  const friends = allUsers.filter((u) => u.uid !== currentUser?.uid || true);
+  const {
+    tradeProposals,
+    acceptTradeProposal,
+    createTradeProposal,
+    deleteTradeProposal,
+  } = useTradeProposals();
+
+  const flattenedTradeProposals = Object.entries(tradeProposals).reduce(
+    (accumulator, [userId, proposals]) => {
+      return {
+        ...accumulator,
+        [userId]: Object.entries(proposals).map(([key, proposal]) => ({
+          key,
+          ...proposal,
+        })),
+      };
+    },
+    {} as {
+      [userId: string]: FlattenedTradeProposal[];
+    }
+  );
+
+  const tradeableCards = filteredCards.filter(
+    (c) =>
+      c.rarity !== "Promo" &&
+      c.rarity !== "👑" &&
+      c.rarity !== "☆☆" &&
+      c.rarity !== "☆☆☆" &&
+      c.set !== "A2a"
+  );
+
+  const searchResults = useMemo(() => {
+    return tradeableCards.filter((c) => {
+      return c.name.toLowerCase().startsWith(searchText.toLowerCase());
+    });
+  }, [tradeableCards, searchText]);
 
   if (isAuthLoading) {
     return <span>Loading...</span>;
@@ -85,108 +96,199 @@ function App() {
     return <button onClick={performGoogleSignIn}>Sign In</button>;
   }
 
+  const myTradeProposals = flattenedTradeProposals[currentUser.uid] ?? [];
+  const myOffers = myTradeProposals.filter((p) => p.type === "offer").reverse();
+  const myRequests = myTradeProposals
+    .filter((p) => p.type === "request")
+    .reverse();
+
+  interface PotentialTrade {
+    myOffer: FlattenedTradeProposal;
+    myRequest: FlattenedTradeProposal;
+    theirOffer: FlattenedTradeProposal;
+    theirRequest: FlattenedTradeProposal;
+    theirUserId: string;
+    theirName: string;
+  }
+
+  const potentialTrades: PotentialTrade[] = [];
+  for (const myOffer of myOffers) {
+    for (const [theirUserId, proposals] of Object.entries(
+      flattenedTradeProposals
+    )) {
+      if (theirUserId === currentUser.uid) {
+        continue;
+      }
+      const theirRequest = proposals.find(
+        (p) =>
+          p.set === myOffer.set && p.id == myOffer.id && p.type === "request"
+      );
+      if (!theirRequest) {
+        continue;
+      }
+
+      const theirOffers = proposals.filter(
+        (theirOffer) =>
+          theirOffer.type === "offer" &&
+          myRequests.some(
+            (myRequest) =>
+              theirOffer.set === myRequest.set &&
+              theirOffer.id === myRequest.id &&
+              doRaritiesMatch(myOffer, myRequest)
+          )
+      );
+      if (theirOffers.length === 0) {
+        continue;
+      }
+
+      const theirName =
+        allUsers
+          .find((u) => u.uid === theirUserId)
+          ?.displayName?.split(" ")[0] ?? "???";
+
+      theirOffers.forEach((theirOffer) => {
+        const myRequest = myRequests.find(
+          (r) => r.set === theirOffer.set && r.id === theirOffer.id
+        );
+        if (!myRequest) {
+          return;
+        }
+        potentialTrades.push({
+          myOffer,
+          myRequest,
+          theirOffer,
+          theirRequest,
+          theirUserId,
+          theirName,
+        });
+      });
+    }
+  }
+
   return (
-    <div>
-      <button onClick={() => setView(View.ALL_CARDS)}>All Cards</button>
-      <button onClick={() => setView(View.MY_WISHLIST)}>My Wishlist</button>
-      <button onClick={() => setView(View.MY_FRIENDS)}>My Friends</button>
-      {view === View.MY_FRIENDS ? (
-        <div>
-          {friends.map((u) => (
-            <button key={u.uid} onClick={() => onFriendSelected(u)}>
-              {u.displayName}
-            </button>
+    <>
+      <input
+        placeholder="Search"
+        value={searchText}
+        onChange={(e) => setSearchText(e.target.value)}
+      />
+      <label>Set:</label>
+      <select onChange={(event) => onSetSelected(event.target.value)}>
+        <option value="">All Sets</option>
+        <option value="A1">Genetic Apex</option>
+        <option value="A1a">Mythical Island</option>
+        <option value="A2">Space-Time Smackdown</option>
+        <option value="A2a">Triumphant Light</option>
+      </select>
+      <div className="search-results">
+        {searchResults.length === 0 && "No tradeable cards found"}
+        {searchResults.slice(0, maxSearchResults).map((c) => (
+          <div className="search-result" key={`${c.set}-${c.id}`}>
+            <img src={getCardImageUrl(c)} />
+            <div className="search-result-controls">
+              <button
+                onClick={() => createTradeProposal(c, "offer", currentUser.uid)}
+              >
+                🙌
+              </button>
+              <button
+                onClick={() =>
+                  createTradeProposal(c, "request", currentUser.uid)
+                }
+              >
+                🙏
+              </button>
+            </div>
+          </div>
+        ))}
+        <div ref={loadMoreRef} />
+      </div>
+      <div className="trade-proposals">
+        <h3>My Offers</h3>
+        <div className="proposed-cards">
+          {myOffers.length === 0 && "No offers found"}
+          {myOffers.map((p) => (
+            <img
+              key={p.key}
+              src={getCardImageUrl(p)}
+              style={{ cursor: "pointer" }}
+              onClick={() => deleteTradeProposal(currentUser.uid, p.key)}
+            />
           ))}
         </div>
-      ) : (
-        <div>
-          {view === View.FRIEND_WISHLIST ? (
-            <span>{friend?.displayName}'s Wishlist</span>
-          ) : view === View.MY_WISHLIST ? (
-            <span>My Wishlist</span>
-          ) : (
-            <span>All Cards</span>
-          )}
-          <div>
-            <label>Set:</label>
-            <select onChange={(event) => onSetSelected(event.target.value)}>
-              <option value="">All Sets</option>
-              <option value="A1">Genetic Apex</option>
-              <option value="A1a">Mythical Island</option>
-              <option value="A2">Space-Time Smackdown</option>
-              <option value="A2a">Triumphant Light</option>
-            </select>
-            <label>Rarity:</label>
-            <select onChange={(event) => onRaritySelected(event.target.value)}>
-              <option value="">All Rarities</option>
-              <option>◊</option>
-              <option>◊◊</option>
-              <option>◊◊◊</option>
-              <option>◊◊◊◊</option>
-              <option>☆</option>
-              <option>☆☆</option>
-              <option>☆☆☆</option>
-              <option>👑</option>
-              <option>Promo</option>
-            </select>
-            <label>Type:</label>
-            <select onChange={(event) => onTypeSelected(event.target.value)}>
-              <option value="">All Types</option>
-              <option value="G">Grass</option>
-              <option value="R">Fire</option>
-              <option value="W">Water</option>
-              <option value="L">Electric</option>
-              <option value="P">Psychic</option>
-              <option value="F">Fighting</option>
-              <option value="D">Darkness</option>
-              <option value="M">Metal</option>
-              <option value="N">Dragon</option>
-              <option value="C">Colorless</option>
-              <option>Item</option>
-              <option>Tool</option>
-              <option>Supporter</option>
-            </select>
-          </div>
-          <span>
-            {resultMax > 0 ? (
-              <>
-                Showing Results {resultMin + 1} - {resultMax} (Page {page}/
-                {numberOfPages})
-              </>
-            ) : (
-              <>No results found</>
-            )}
-          </span>
-          <button disabled={!hasPrevPage} onClick={() => setPage((p) => p - 1)}>
-            Prev Page
-          </button>
-          <button disabled={!hasNextPage} onClick={() => setPage((p) => p + 1)}>
-            Next Page
-          </button>
-          <div className="card-images">
-            {filteredCards.slice(resultMin, resultMax).map((c) => {
-              const isWishlisted = myWishlist.some(
-                (w) => w.set === c.set && w.number === c.number
-              );
-              return (
-                <CardImage
-                  key={`${c.set}-${c.number}`}
-                  card={c}
-                  isWishlisted={view === View.ALL_CARDS ? isWishlisted : true}
-                  onClick={
-                    view !== View.ALL_CARDS
-                      ? () => {}
-                      : isWishlisted
-                      ? () => removeFromMyWishlist(c)
-                      : () => addToMyWishlist(c)
-                  }
-                />
-              );
-            })}
-          </div>
+      </div>
+      <div className="trade-proposals">
+        <h3>My Requests</h3>
+        {myRequests.length === 0 && "No requests found"}
+        <div className="proposed-cards">
+          {myRequests.map((p) => (
+            <img
+              key={p.key}
+              src={getCardImageUrl(p)}
+              style={{ cursor: "pointer" }}
+              onClick={() => deleteTradeProposal(currentUser.uid, p.key)}
+            />
+          ))}
         </div>
-      )}
-    </div>
+      </div>
+      <div className="trade-proposals">
+        <h3>Potential Trades</h3>
+        {potentialTrades.length === 0 && "No potential trades found"}
+        <div>
+          {potentialTrades.map(
+            ({
+              myOffer,
+              myRequest,
+              theirOffer,
+              theirRequest,
+              theirName,
+              theirUserId,
+            }) => (
+              <div
+                style={{
+                  alignItems: "center",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: "2rem",
+                  textAlign: "center",
+                  width: "100%",
+                }}
+                key={`${myOffer.key} ${theirOffer.key}`}
+              >
+                <div className="potential-trade-info">
+                  <img src={getCardImageUrl(myOffer)} />
+                  <div>You send</div>
+                </div>
+                <div>
+                  <div>➡️</div>
+                  <br />
+                  <div>⬅️</div>
+                </div>
+                <div className="potential-trade-info">
+                  <img src={getCardImageUrl(theirOffer)} />
+                  <div>{theirName} sends</div>
+                </div>
+                <button
+                  onClick={() =>
+                    acceptTradeProposal(
+                      myOffer,
+                      myRequest,
+                      currentUser.uid,
+                      theirOffer,
+                      theirRequest,
+                      theirUserId,
+                      theirName
+                    )
+                  }
+                >
+                  ✅
+                </button>
+              </div>
+            )
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
