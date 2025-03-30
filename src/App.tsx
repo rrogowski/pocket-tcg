@@ -9,6 +9,7 @@ import {
 } from "./firebase";
 
 interface Filters {
+  rarity?: string;
   set?: string;
 }
 
@@ -21,6 +22,10 @@ function App() {
 
   const onSetSelected = (set: string) => {
     setFilters((f) => ({ ...f, set }));
+  };
+
+  const onRaritySelected = (rarity: string) => {
+    setFilters((f) => ({ ...f, rarity }));
   };
 
   const loadMoreRef = useRef(null);
@@ -47,7 +52,7 @@ function App() {
 
   const filteredCards = CARDS.filter((c) =>
     filters.set ? c.set === filters.set : true
-  );
+  ).filter((c) => (filters.rarity ? c.rarity === filters.rarity : true));
 
   const [searchText, setSearchText] = useState("");
 
@@ -178,6 +183,15 @@ function App() {
         <option value="A1a">Mythical Island</option>
         <option value="A2">Space-Time Smackdown</option>
         <option value="A2a">Triumphant Light</option>
+      </select>
+      <label>Rarity:</label>
+      <select onChange={(event) => onRaritySelected(event.target.value)}>
+        <option value="">All Rarities</option>
+        <option>◊</option>
+        <option>◊◊</option>
+        <option>◊◊◊</option>
+        <option>◊◊◊◊</option>
+        <option>☆</option>
       </select>
       <div className="search-results">
         {searchResults.length === 0 && "No tradeable cards found"}
