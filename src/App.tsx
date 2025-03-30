@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
-import { CARDS, doRaritiesMatch, getCardImageUrl } from "./cards";
+import { CARDS, doRaritiesMatch, findCard, getCardImageUrl } from "./cards";
 import {
   FlattenedTradeProposal,
   useAllUsers,
@@ -13,10 +13,19 @@ interface Filters {
   set?: string;
 }
 
+interface PotentialTradeFilters {
+  player?: string;
+  rarity?: string;
+  set?: string;
+}
+
 function App() {
   const { currentUser, isAuthLoading, performGoogleSignIn } = useAuth();
   const allUsers = useAllUsers();
   const [filters, setFilters] = useState<Filters>({});
+
+  const [potentialTradeFilters, setPotentialTradeFilters] =
+    useState<PotentialTradeFilters>({});
 
   const [maxSearchResults, setMaxSearchResults] = useState(9);
 
@@ -26,6 +35,18 @@ function App() {
 
   const onRaritySelected = (rarity: string) => {
     setFilters((f) => ({ ...f, rarity }));
+  };
+
+  const onPotentialTradeSetSelected = (set: string) => {
+    setPotentialTradeFilters((f) => ({ ...f, set }));
+  };
+
+  const onPotentialTradeRaritySelected = (rarity: string) => {
+    setPotentialTradeFilters((f) => ({ ...f, rarity }));
+  };
+
+  const onPotentialTradePlayerSelected = (player: string) => {
+    setPotentialTradeFilters((f) => ({ ...f, player }));
   };
 
   const loadMoreRef = useRef(null);
@@ -169,6 +190,23 @@ function App() {
     }
   }
 
+  const filteredPotentialTrades = potentialTrades
+    .filter((t) =>
+      potentialTradeFilters.set
+        ? potentialTradeFilters.set === t.myRequest.set
+        : true
+    )
+    .filter((t) =>
+      potentialTradeFilters.rarity
+        ? potentialTradeFilters.rarity === findCard(t.myRequest)?.rarity
+        : true
+    )
+    .filter((t) =>
+      potentialTradeFilters.player
+        ? potentialTradeFilters.player === t.theirName
+        : true
+    );
+
   return (
     <>
       <input
@@ -246,9 +284,45 @@ function App() {
       </div>
       <div className="trade-proposals">
         <h3>Potential Trades</h3>
-        {potentialTrades.length === 0 && "No potential trades found"}
+        <label>Player:</label>
+        <select
+          onChange={(event) =>
+            onPotentialTradePlayerSelected(event.target.value)
+          }
+        >
+          <option value="">All Players</option>
+          {allUsers
+            .filter((u) => u.uid !== currentUser.uid)
+            .map((u) => (
+              <option>{u.displayName?.split(" ")[0] ?? "???"}</option>
+            ))}
+        </select>
+        <label>Set:</label>
+        <select
+          onChange={(event) => onPotentialTradeSetSelected(event.target.value)}
+        >
+          <option value="">All Sets</option>
+          <option value="A1">Genetic Apex</option>
+          <option value="A1a">Mythical Island</option>
+          <option value="A2">Space-Time Smackdown</option>
+          <option value="A2a">Triumphant Light</option>
+        </select>
+        <label>Rarity:</label>
+        <select
+          onChange={(event) =>
+            onPotentialTradeRaritySelected(event.target.value)
+          }
+        >
+          <option value="">All Rarities</option>
+          <option>◊</option>
+          <option>◊◊</option>
+          <option>◊◊◊</option>
+          <option>◊◊◊◊</option>
+          <option>☆</option>
+        </select>
+        {filteredPotentialTrades.length === 0 && "No potential trades found"}
         <div>
-          {potentialTrades.map(
+          {filteredPotentialTrades.map(
             ({
               myOffer,
               myRequest,

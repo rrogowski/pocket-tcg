@@ -13,7 +13,6 @@ export const doRaritiesMatch = (
   a: Pick<Card, "set" | "id">,
   b: Pick<Card, "set" | "id">
 ) => {
-  console.log("do rarities match", a, b);
   return (
     CARDS.find((c) => c.set === a.set && c.id === a.id)?.rarity ===
     CARDS.find((c) => c.set === b.set && c.id === b.id)?.rarity
