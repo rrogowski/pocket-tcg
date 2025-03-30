@@ -78,8 +78,7 @@ function App() {
       c.rarity !== "Promo" &&
       c.rarity !== "👑" &&
       c.rarity !== "☆☆" &&
-      c.rarity !== "☆☆☆" &&
-      c.set !== "A2a"
+      c.rarity !== "☆☆☆"
   );
 
   const searchResults = useMemo(() => {
