@@ -178,6 +178,17 @@ function App() {
         if (!myRequest) {
           return;
         }
+        if (
+          // Don't show my same offer for duplicates of their offer.
+          potentialTrades.some(
+            (t) =>
+              t.theirOffer.set === theirOffer.set &&
+              t.theirOffer.id === theirOffer.id &&
+              t.myOffer.key === myOffer.key
+          )
+        ) {
+          return;
+        }
         potentialTrades.push({
           myOffer,
           myRequest,
@@ -189,6 +200,8 @@ function App() {
       });
     }
   }
+
+  console.log(potentialTrades.length);
 
   const filteredPotentialTrades = potentialTrades
     .filter((t) =>
