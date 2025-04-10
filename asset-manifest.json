@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "/pocket-tcg/static/css/main.1b3217cf.css",
-    "main.js": "/pocket-tcg/static/js/main.4b7c5aa5.js",
+    "main.js": "/pocket-tcg/static/js/main.019a9ad1.js",
     "static/js/453.13c90830.chunk.js": "/pocket-tcg/static/js/453.13c90830.chunk.js",
     "index.html": "/pocket-tcg/index.html",
     "main.1b3217cf.css.map": "/pocket-tcg/static/css/main.1b3217cf.css.map",
-    "main.4b7c5aa5.js.map": "/pocket-tcg/static/js/main.4b7c5aa5.js.map",
+    "main.019a9ad1.js.map": "/pocket-tcg/static/js/main.019a9ad1.js.map",
     "453.13c90830.chunk.js.map": "/pocket-tcg/static/js/453.13c90830.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.1b3217cf.css",
-    "static/js/main.4b7c5aa5.js"
+    "static/js/main.019a9ad1.js"
   ]
 }
