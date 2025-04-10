@@ -127,6 +127,14 @@ function App() {
     .filter((p) => p.type === "request")
     .reverse();
 
+  const myOffersFiltered = myOffers.filter((t) =>
+    filters.set ? t.set === filters.set : true
+  );
+
+  const myRequestsFiltered = myRequests.filter((t) =>
+    filters.set ? t.set === filters.set : true
+  );
+
   interface PotentialTrade {
     myOffer: FlattenedTradeProposal;
     myRequest: FlattenedTradeProposal;
@@ -201,8 +209,6 @@ function App() {
     }
   }
 
-  console.log(potentialTrades.length);
-
   const filteredPotentialTrades = potentialTrades
     .filter((t) =>
       potentialTradeFilters.set
@@ -270,8 +276,8 @@ function App() {
       <div className="trade-proposals">
         <h3>My Offers</h3>
         <div className="proposed-cards">
-          {myOffers.length === 0 && "No offers found"}
-          {myOffers.map((p) => (
+          {myOffersFiltered.length === 0 && "No offers found"}
+          {myOffersFiltered.map((p) => (
             <img
               key={p.key}
               src={getCardImageUrl(p)}
@@ -283,9 +289,9 @@ function App() {
       </div>
       <div className="trade-proposals">
         <h3>My Requests</h3>
-        {myRequests.length === 0 && "No requests found"}
+        {myRequestsFiltered.length === 0 && "No requests found"}
         <div className="proposed-cards">
-          {myRequests.map((p) => (
+          {myRequestsFiltered.map((p) => (
             <img
               key={p.key}
               src={getCardImageUrl(p)}
